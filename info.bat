@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableDelayedExpansion
 
 @echo HOSTNAME
 for /f "tokens=2 delims==" %%G in ('wmic computersystem get name /value ^| findstr /c:"=" ^| findstr /v /c:"Caption"') do set "hostname=%%G"
@@ -23,19 +24,40 @@ echo %CPUName%
 echo.
 
 
+:: Información sobre el disco
+:: Modelo, Memoria y Letra asignada
 @echo RAM (GB)
 powershell.exe -command "$totalMemory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property capacity -Sum).sum /1gb; '{0:N2}' -f $totalMemory"
 echo.
 
+
+:: Información sobre el disco
+:: Modelo, Memoria y Letra asignada
 @echo|set /p="DISCO (GB)"
 echo.
-powershell.exe -command "Get-WmiObject -Class Win32_LogicalDisk -ComputerName LOCALHOST | ? {$_.DriveType -eq 3} | ForEach-Object { '{0}{1}{2}' -f $_.DeviceID, ' ', ([math]::Round($_.Size/1GB, 2)).ToString() } | Out-String -Stream | ForEach-Object { $_ -replace '\r\n', '`n' }"
+
+for /f "tokens=2 delims='='" %%a in ('wmic path win32_diskdrive get model /value') do set "name=%%a"
+for /f "tokens=2 delims='='" %%b in ('wmic path win32_diskdrive get size /value') do set "size=%%b"
+for /f "tokens=2 delims='='" %%c in ('powershell -command "Get-WmiObject Win32_DiskDrive | select -ExpandProperty DeviceID"') do set "letter=%%c"
+
+for /f "usebackq tokens=1,2 delims=: " %%a in (`powershell -command "& {[int64]$a = %size%; if ($a -ge 1TB) { '{0:N2} TB' -f ($a/1TB) } elseif ($a -ge 1GB) { '{0:N2} GB' -f ($a/1GB) } else { '{0:N2} MB' -f ($a/1MB) } } "`) do set "cap=%%a" & set "unit=%%b"
+
+echo %name%    %cap%%unit%    %letter%
+
+
 echo.
 
+:: Información sobre la GPU
+:: Modelo y Memoria
 @echo|set /p="GPU"
 echo.
-powershell.exe -command "Get-WmiObject -Class Win32_VideoController | ForEach-Object { '{0}{1}' -f $_.Name, ' ' + [math]::Round($_.AdapterRAM / 1GB, 2),'GB' } | Out-String -Stream | ForEach-Object { $_ -replace '\r\n', '' }"
+
+for /f "tokens=2 delims='='" %%a in ('wmic path win32_videocontroller get name /value') do set "name=%%a"
+for /f "tokens=2 delims='='" %%b in ('wmic path win32_videocontroller get AdapterRAM /value') do set "ram=%%b"
+for /f "usebackq tokens=1,2 delims=: " %%a in (`powershell -command "& {[int64]$a = %ram%; if ($a -ge 1GB) { '{0:N2} GB' -f ($a/1GB) } else { '{0:N2} MB' -f ($a/1MB) } } "`) do set "mem=%%a" & set "unit=%%b"
+echo %name% %mem%%unit%
 echo.
+
 
 @echo S.O.
 powershell.exe -command "Get-CimInstance Win32_OperatingSystem | select -ExpandProperty Caption"
